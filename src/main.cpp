@@ -62,12 +62,22 @@ static void TryAddDevice(CorsairDeviceInfo& csrDevice)
     auto deviceIt = std::find_if(g_devices.begin(), g_devices.end(), [&](DeviceInfo& device) { return strcmp(device.m_id, csrDevice.id) == 0; });
     if(deviceIt != g_devices.end()) return;
 
-    CorsairDataType dataType;
+    CorsairProperty properties;
     CorsairPropertyFlag flags;
-    CorsairGetDevicePropertyInfo(csrDevice.id, CorsairDevicePropertyId::CDPI_BatteryLevel, 0, &dataType, (uint32_t*)&flags);
+    CorsairReadDeviceProperty(csrDevice.id, CorsairDevicePropertyId::CDPI_PropertyArray, 0, &properties);
+
+    CorsairDataType_Int32Array& propertiesArr = properties.value.int32_array;
+    bool hasBatteryLevel = false;
+    for(uint32_t i = 0; i < propertiesArr.count; i++) {
+        CorsairDevicePropertyId property = (CorsairDevicePropertyId)propertiesArr.items[i];
+        if(property == CorsairDevicePropertyId::CDPI_BatteryLevel) {
+            hasBatteryLevel = true;
+            break;
+        }
+    }
 
     // Device doesn't have a battery level
-    if(flags == CorsairPropertyFlag::CPF_None) return;
+    if(!hasBatteryLevel) return;
 
     auto& device = g_devices.emplace_back(DeviceInfo{});
     strcpy(device.m_id, csrDevice.id);
