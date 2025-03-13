@@ -24,29 +24,35 @@ struct DeviceInfo
 // Globals
 static bool g_sdkConnected = false;
 static bool g_devicesChanged = false;
-static NOTIFYICONDATAW g_notification;
+static NOTIFYICONDATAW g_trayIcon;
 static std::vector<DeviceInfo> g_devices{};
 static std::mutex g_devicesMutex{};
 
 // Utility stuff
-static void SetNotificationText(const wchar_t* text)
+static void SetTrayIconText(const wchar_t* text)
 {
-    wcscpy(g_notification.szTip, text);
-    Shell_NotifyIconW(NIM_MODIFY, &g_notification);
+    wcscpy(g_trayIcon.szTip, text);
+    BOOL result = Shell_NotifyIconW(NIM_MODIFY, &g_trayIcon);
+    if(!result) {
+        printf("Failed to set tray text\n");
+    }
 }
 
 static void RegisterTrayIcon(HWND hwnd)
 {
-    memset(&g_notification, 0, sizeof(g_notification));
-    g_notification.cbSize = sizeof(g_notification);
-    g_notification.hWnd = hwnd;
-    g_notification.uCallbackMessage = WM_APP + 1;
-    g_notification.hIcon = LoadIconW(NULL, MAKEINTRESOURCEW(32516));
-    g_notification.uFlags = NIF_TIP | NIF_MESSAGE | NIF_SHOWTIP | NIF_ICON;
-    Shell_NotifyIconW(NIM_ADD, &g_notification);
+    memset(&g_trayIcon, 0, sizeof(g_trayIcon));
+    g_trayIcon.cbSize = sizeof(g_trayIcon);
+    g_trayIcon.hWnd = hwnd;
+    g_trayIcon.uCallbackMessage = WM_APP + 1;
+    g_trayIcon.hIcon = LoadIconW(NULL, MAKEINTRESOURCEW(32516));
+    g_trayIcon.uFlags = NIF_TIP | NIF_MESSAGE | NIF_SHOWTIP | NIF_ICON;
+    BOOL result = Shell_NotifyIconW(NIM_ADD, &g_trayIcon);
+    if(!result) {
+        printf("Failed to add tray icon\n");
+    }
 
-    g_notification.uVersion = NOTIFYICON_VERSION_4;
-    Shell_NotifyIconW(NIM_SETVERSION, &g_notification);
+    g_trayIcon.uVersion = NOTIFYICON_VERSION_4;
+    Shell_NotifyIconW(NIM_SETVERSION, &g_trayIcon);
 }
 
 static void TryAddDevice(CorsairDeviceInfo& csrDevice)
@@ -204,7 +210,7 @@ int main()
             if(g_devices.size() == 0) stream << "No devices connected";
 
             auto string = stream.str();
-            SetNotificationText(string.data());
+            SetTrayIconText(string.data());
         }
 
         g_devicesChanged = false;
