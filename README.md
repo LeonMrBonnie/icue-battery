@@ -23,3 +23,9 @@ the `deps/cue-sdk` folder. The resulting layout should have the `doc`, `include`
 To build the project using xmake, simply run `xmake build` inside the root of the repository. This will create a binary you can run.
 
 > If there are any compilation errors e.g. due to failed linking, make sure the iCUE SDK has been properly placed.
+
+## Using it
+
+Just execute the `icue-battery.exe` in the build output folder.
+
+The program will open in the background, to close it just right-click the tray icon.

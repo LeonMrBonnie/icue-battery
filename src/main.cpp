@@ -24,7 +24,7 @@ struct DeviceInfo
 // Globals
 static bool g_sdkConnected = false;
 static bool g_devicesChanged = false;
-static NOTIFYICONDATAW g_trayIcon;
+static NOTIFYICONDATAW g_trayIcon{};
 static std::vector<DeviceInfo> g_devices{};
 static std::mutex g_devicesMutex{};
 
@@ -40,18 +40,18 @@ static void SetTrayIconText(const wchar_t* text)
 
 static void RegisterTrayIcon(HWND hwnd)
 {
-    memset(&g_trayIcon, 0, sizeof(g_trayIcon));
     g_trayIcon.cbSize = sizeof(g_trayIcon);
+    g_trayIcon.uID = 1;
     g_trayIcon.hWnd = hwnd;
-    g_trayIcon.uCallbackMessage = WM_APP + 1;
+    g_trayIcon.uCallbackMessage = WM_USER + 0x100;
     g_trayIcon.hIcon = LoadIconW(NULL, MAKEINTRESOURCEW(32516));
     g_trayIcon.uFlags = NIF_TIP | NIF_MESSAGE | NIF_SHOWTIP | NIF_ICON;
+    g_trayIcon.uVersion = NOTIFYICON_VERSION_4;
     BOOL result = Shell_NotifyIconW(NIM_ADD, &g_trayIcon);
     if(!result) {
         printf("Failed to add tray icon\n");
     }
 
-    g_trayIcon.uVersion = NOTIFYICON_VERSION_4;
     Shell_NotifyIconW(NIM_SETVERSION, &g_trayIcon);
 }
 
@@ -126,12 +126,28 @@ static void OnCorsairEvent(void*, const CorsairEvent* event)
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
-    return DefWindowProcW(hwnd, message, wParam, lParam);
+    switch(message) {
+        case WM_USER + 0x100: {
+            switch (LOWORD(lParam))
+            {
+                case WM_CONTEXTMENU: {
+                    exit(0);
+                    break;
+                }
+            }
+            break;
+        }
+        default: return DefWindowProcW(hwnd, message, wParam, lParam);
+    }
 }
 
 // Main
 int main()
 {
+#ifndef DEBUG
+    FreeConsole();
+#endif
+
     // Init SDK
     CorsairError error = CorsairConnect(OnSessionStateChangedHandler, nullptr);
     if(error)
@@ -172,7 +188,7 @@ int main()
     // Create window
     WNDCLASSEXW wcex = { sizeof(WNDCLASSEXW) };
     wcex.style = CS_DBLCLKS;
-    wcex.lpfnWndProc = WndProc;
+    wcex.lpfnWndProc = &WndProc;
     wcex.hInstance = GetModuleHandle(0);
     wcex.hIcon = LoadIcon(NULL, IDI_APPLICATION);
     wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
@@ -181,50 +197,58 @@ int main()
     wcex.lpszClassName = L"icue-battery-class";
     wcex.hIconSm = LoadIcon(NULL, IDI_APPLICATION);
     RegisterClassExW(&wcex);
-    HWND window = CreateWindowW(wcex.lpszClassName, NULL, 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, GetModuleHandle(0), NULL);
+    HWND window = CreateWindowW(wcex.lpszClassName, NULL, 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, GetModuleHandle(NULL), NULL);
 
     // Create tray icon
     RegisterTrayIcon(window);
 
-    // Update continously
-    while(true)
-    {
-        if(!g_sdkConnected)
-        {
+    // Create thread to handle main loop
+    auto thread = std::thread([]() {
+        while(true) {
+            if(!g_sdkConnected)
+            {
+                std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+                continue;
+            }
+
+            // Update battery levels
+            bool anyDeviceUpdated = g_devicesChanged;
+            for(auto& device : g_devices)
+            {
+                int currentBatteryLevel = device.GetBatteryLevel();
+                if(currentBatteryLevel != device.m_lastBatteryLevel)
+                {
+                    device.m_lastBatteryLevel = currentBatteryLevel;
+                    anyDeviceUpdated = true;
+                }
+            }
+
+            // Construct and update tooltip
+            if(anyDeviceUpdated)
+            {
+                std::wostringstream stream;
+                for(size_t i = 0; i < g_devices.size(); i++)
+                {
+                    auto& device = g_devices[i];
+                    stream << device.m_deviceName << ": " << device.m_lastBatteryLevel << "%";
+                    if(i != g_devices.size() - 1) stream << "\n";
+                }
+                if(g_devices.size() == 0) stream << "No devices connected";
+
+                auto string = stream.str();
+                SetTrayIconText(string.data());
+            }
+
+            g_devicesChanged = false;
             std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-            continue;
         }
+    });
 
-        // Update battery levels
-        bool anyDeviceUpdated = g_devicesChanged;
-        for(auto& device : g_devices)
-        {
-            int currentBatteryLevel = device.GetBatteryLevel();
-            if(currentBatteryLevel != device.m_lastBatteryLevel)
-            {
-                device.m_lastBatteryLevel = currentBatteryLevel;
-                anyDeviceUpdated = true;
-            }
-        }
-
-        // Construct and update tooltip
-        if(anyDeviceUpdated)
-        {
-            std::wostringstream stream;
-            for(size_t i = 0; i < g_devices.size(); i++)
-            {
-                auto& device = g_devices[i];
-                stream << device.m_deviceName << ": " << device.m_lastBatteryLevel << "%";
-                if(i != g_devices.size() - 1) stream << "\n";
-            }
-            if(g_devices.size() == 0) stream << "No devices connected";
-
-            auto string = stream.str();
-            SetTrayIconText(string.data());
-        }
-
-        g_devicesChanged = false;
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    // Send WndProc messages
+    MSG msg;
+    while(GetMessageW(&msg, nullptr, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessageW(&msg);
     }
 
     return 0;

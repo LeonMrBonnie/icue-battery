@@ -19,3 +19,7 @@ target("icue-battery")
     add_links("deps/cue-sdk/lib/x64/iCUESDK.x64_2019")
     set_configdir("$(buildir)/$(plat)/$(arch)/$(mode)")
     add_configfiles("deps/cue-sdk/redist/x64/iCUESDK.x64_2019.dll", { onlycopy = true })
+
+    if is_mode("debug") then
+        add_defines("DEBUG")
+    end
