@@ -23,6 +23,7 @@ struct DeviceInfo
 
 // Globals
 static bool g_sdkConnected = false;
+static bool g_devicesChanged = false;
 static NOTIFYICONDATAW g_notification;
 static std::vector<DeviceInfo> g_devices{};
 static std::mutex g_devicesMutex{};
@@ -34,7 +35,7 @@ static void SetNotificationText(const wchar_t* text)
     Shell_NotifyIconW(NIM_MODIFY, &g_notification);
 }
 
-static void RegisterNotification(HWND hwnd)
+static void RegisterTrayIcon(HWND hwnd)
 {
     memset(&g_notification, 0, sizeof(g_notification));
     g_notification.cbSize = sizeof(g_notification);
@@ -65,6 +66,8 @@ static void TryAddDevice(CorsairDeviceInfo& csrDevice)
     auto& device = g_devices.emplace_back(DeviceInfo{});
     strcpy(device.m_id, csrDevice.id);
     strcpy(device.m_deviceName, csrDevice.model);
+
+    printf("Added device %s\n", device.m_deviceName);
 }
 
 // Callbacks
@@ -99,8 +102,10 @@ static void OnCorsairEvent(void*, const CorsairEvent* event)
         // Try removing the existing device
         auto deviceIt = std::find_if(g_devices.begin(), g_devices.end(), [&](DeviceInfo& device) { return strcmp(device.m_id, statusChangeEvent->deviceId) == 0; });
         if(deviceIt == g_devices.end()) return;
+        printf("Removed device %s\n", deviceIt->m_deviceName);
         g_devices.erase(deviceIt);
     }
+    g_devicesChanged = true;
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -163,7 +168,7 @@ int main()
     HWND window = CreateWindowW(wcex.lpszClassName, NULL, 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, GetModuleHandle(0), NULL);
 
     // Create tray icon
-    RegisterNotification(window);
+    RegisterTrayIcon(window);
 
     // Update continously
     while(true)
@@ -175,7 +180,7 @@ int main()
         }
 
         // Update battery levels
-        bool anyDeviceUpdated = false;
+        bool anyDeviceUpdated = g_devicesChanged;
         for(auto& device : g_devices)
         {
             int currentBatteryLevel = device.GetBatteryLevel();
@@ -196,10 +201,13 @@ int main()
                 stream << device.m_deviceName << ": " << device.m_lastBatteryLevel << "%";
                 if(i != g_devices.size() - 1) stream << "\n";
             }
+            if(g_devices.size() == 0) stream << "No devices connected";
+
             auto string = stream.str();
             SetNotificationText(string.data());
         }
 
+        g_devicesChanged = false;
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
     }
 
