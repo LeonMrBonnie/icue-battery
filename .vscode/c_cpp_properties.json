@@ -1,0 +1,18 @@
+{
+    "configurations": [
+        {
+            "name": "Win32",
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "cppStandard": "c++20",
+            "intelliSenseMode": "msvc-x64",
+            "includePath": [
+                "deps/cue-sdk/include/iCUESDK"
+            ]
+        }
+    ],
+    "version": 4
+}

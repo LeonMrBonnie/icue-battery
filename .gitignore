@@ -1,0 +1,8 @@
+.xmake/
+build/
+deps/cue-sdk/doc/*
+deps/cue-sdk/include/*
+deps/cue-sdk/lib/*
+deps/cue-sdk/redist/*
+.vscode/compile_commands.json
+.vscode/settings.json
