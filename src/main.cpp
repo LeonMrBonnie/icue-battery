@@ -86,6 +86,28 @@ static void TryAddDevice(CorsairDeviceInfo& csrDevice)
     printf("Added device %s\n", device.m_deviceName);
 }
 
+static void PollForDevices()
+{
+    // Get devices
+    CorsairDeviceFilter filter;
+    filter.deviceTypeMask = CDT_All;
+    CorsairDeviceInfo infos[16];
+    int deviceAmount = 0;
+    CorsairGetDevices(&filter, ARRAYSIZE(infos), &infos[0], &deviceAmount);
+    if(deviceAmount == 0)
+    {
+        printf("Failed to get devices");
+        return;
+    }
+
+    // Save device infos
+    for(int i = 0; i < deviceAmount; i++)
+    {
+        CorsairDeviceInfo& csrDevice = infos[i];
+        TryAddDevice(csrDevice);
+    }
+}
+
 // Callbacks
 static void OnSessionStateChangedHandler(void*, const CorsairSessionStateChanged* eventData)
 {
@@ -167,23 +189,7 @@ int main()
     CorsairSubscribeForEvents(OnCorsairEvent, nullptr);
 
     // Get devices
-    CorsairDeviceFilter filter;
-    filter.deviceTypeMask = CDT_All;
-    CorsairDeviceInfo infos[16];
-    int deviceAmount = 0;
-    CorsairGetDevices(&filter, ARRAYSIZE(infos), &infos[0], &deviceAmount);
-    if(deviceAmount == 0)
-    {
-        printf("Failed to get devices");
-        return 1;
-    }
-
-    // Save device infos
-    for(int i = 0; i < deviceAmount; i++)
-    {
-        CorsairDeviceInfo& csrDevice = infos[i];
-        TryAddDevice(csrDevice);
-    }
+    PollForDevices();
 
     // Create window
     WNDCLASSEXW wcex = { sizeof(WNDCLASSEXW) };
@@ -210,6 +216,8 @@ int main()
                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
                 continue;
             }
+
+            PollForDevices();
 
             // Update battery levels
             bool anyDeviceUpdated = g_devicesChanged;
